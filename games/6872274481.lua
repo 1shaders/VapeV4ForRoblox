@@ -8490,4 +8490,87 @@ run(function()
 		List = WinEffectName
 	})
 end)
-	
+
+run(function()
+    local anim
+    local asset
+    local lastPosition
+    local NightmareEmote
+
+    NightmareEmote = vape.Categories.World:CreateModule({
+        Name = "NightmareEmote",
+        Function = function(call)
+            if call then
+                local GameQueryUtil
+                if not shared.CheatEngineMode then
+                    GameQueryUtil = require(game:GetService("ReplicatedStorage"):WaitForChild("rbxts_include").node_modules["@easy-games"]["game-core"].out).GameQueryUtil
+                else
+                    local backup = {}; function backup:setQueryIgnored() end; GameQueryUtil = backup;
+                end
+
+                local TweenService = game:GetService("TweenService")
+                local player = game:GetService("Players").LocalPlayer
+                local character = player.Character
+
+                if not character then NightmareEmote:Toggle() return end
+
+                local effectClone = game:GetService("ReplicatedStorage"):WaitForChild("Assets"):WaitForChild("Effects"):WaitForChild("NightmareEmote"):Clone()
+                asset = effectClone
+                asset.Parent = workspace
+                lastPosition = character.PrimaryPart and character.PrimaryPart.Position or Vector3.new()
+
+                task.spawn(function()
+                    while asset ~= nil do
+                        local currentPosition = character.PrimaryPart and character.PrimaryPart.Position
+                        if currentPosition and (currentPosition - lastPosition).Magnitude > 0.1 then
+                            asset:Destroy()
+                            asset = nil
+                            NightmareEmote:Toggle()
+                            break
+                        end
+                        lastPosition = currentPosition
+                        asset:SetPrimaryPartCFrame(character.LowerTorso.CFrame + Vector3.new(0, -2, 0))
+                        task.wait()
+                    end
+                end)
+
+                for _, desc in pairs(asset:GetDescendants()) do
+                    if desc:IsA("BasePart") then
+                        GameQueryUtil:setQueryIgnored(desc, true)
+                        desc.CanCollide = false
+                        desc.Anchored = true
+                    end
+                end
+
+                local Outer = asset:FindFirstChild("Outer")
+                if Outer then
+                    TweenService:Create(Outer, TweenInfo.new(1.5, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1), {
+                        Orientation = Outer.Orientation + Vector3.new(0, 360, 0)
+                    }):Play()
+                end
+
+                local Middle = asset:FindFirstChild("Middle")
+                if Middle then
+                    TweenService:Create(Middle, TweenInfo.new(12.5, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1), {
+                        Orientation = Middle.Orientation + Vector3.new(0, -360, 0)
+                    }):Play()
+                end
+
+                local animationInstance = Instance.new("Animation")
+                animationInstance.AnimationId = "rbxassetid://9191822700"
+                anim = character.Humanoid:LoadAnimation(animationInstance)
+                anim:Play()
+
+            else
+                if anim then
+                    anim:Stop()
+                    anim = nil
+                end
+                if asset then
+                    asset:Destroy()
+                    asset = nil
+                end
+            end
+        end
+    })
+end)
