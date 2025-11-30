@@ -8490,4 +8490,22 @@ run(function()
 		List = WinEffectName
 	})
 end)
-	
+
+run(function()
+	local EmptyGameTP
+
+	EmptyGameTP = vape.Blatant:CreateModule({
+		Name = 'EmptyGameTP',
+		Function = function(callback)
+			if callback then
+				EmptyGameTP.Toggle()
+				local TeleportService = game:GetService('TeleportService')
+				local teleportData = TeleportService:GetLocalPlayerTeleportData()
+				TeleportService:Teleport(game.PlaceId, lplr, teleportData)
+			end
+		end,
+		Tooltip = 'tp you to empty lobby'
+	})
+end)
+
+
