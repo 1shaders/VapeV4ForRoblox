@@ -123,4 +123,29 @@ run(function()
 		Tooltip = 'Automatically opens lucky crates, piston inspired!'
 	})
 end)
-	
+
+
+run(function()
+local AccountFarm
+local QueueTypes
+	AccountFarm = vape.Categories.AltFarm:CreateModule({
+		Name = "AccountGrinding",
+		Function = function(callback)     
+			if QueueTypes.Value == "duels" then 
+				bedwars.QueueController:joinQueue('bedwars_duels')
+			elseif QueueTypes.Value == "1v1s" then 
+				bedwars.QueueController:joinQueue('winstreak_1v1')
+			elseif QueueTypes.Value == "skywars" then 
+				bedwars.QueueController:joinQueue('skywars_to2')
+			else
+				return
+			end
+		end,
+		Tooltip ='Used for getting accounts having rank enabled'
+	})
+    QueueTypes = AccountFarm:CreateDropdown({
+        Name = "Type",
+        List = {'duels', '1v1s'},
+    })
+
+end)

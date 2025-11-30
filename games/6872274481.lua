@@ -1198,91 +1198,8 @@ end)
 for _, v in {'AntiRagdoll', 'TriggerBot', 'SilentAim', 'AutoRejoin', 'Rejoin', 'Disabler', 'Timer', 'ServerHop', 'MouseTP', 'MurderMystery'} do
 	vape:Remove(v)
 end
-run(function()
-	local AimAssist
-	local Targets
-	local Sort
-	local AimSpeed
-	local Distance
-	local AngleSlider
-	local StrafeIncrease
-	local KillauraTarget
-	local ClickAim
-	
-	AimAssist = vape.Categories.Combat:CreateModule({
-		Name = 'AimAssist',
-		Function = function(callback)
-			if callback then
-				AimAssist:Clean(runService.Heartbeat:Connect(function(dt)
-					if entitylib.isAlive and store.hand.toolType == 'sword' and ((not ClickAim.Enabled) or (tick() - bedwars.SwordController.lastSwing) < 0.4) then
-						local ent = not KillauraTarget.Enabled and entitylib.EntityPosition({
-							Range = Distance.Value,
-							Part = 'RootPart',
-							Wallcheck = Targets.Walls.Enabled,
-							Players = Targets.Players.Enabled,
-							NPCs = Targets.NPCs.Enabled,
-							Sort = sortmethods[Sort.Value]
-						}) or store.KillauraTarget
-	
-						if ent then
-							local delta = (ent.RootPart.Position - entitylib.character.RootPart.Position)
-							local localfacing = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
-							local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
-							if angle >= (math.rad(AngleSlider.Value) / 2) then return end
-							targetinfo.Targets[ent] = tick() + 1
-							gameCamera.CFrame = gameCamera.CFrame:Lerp(CFrame.lookAt(gameCamera.CFrame.p, ent.RootPart.Position), (AimSpeed.Value + (StrafeIncrease.Enabled and (inputService:IsKeyDown(Enum.KeyCode.A) or inputService:IsKeyDown(Enum.KeyCode.D)) and 10 or 0)) * dt)
-						end
-					end
-				end))
-			end
-		end,
-		Tooltip = 'Smoothly aims to closest valid target with sword'
-	})
-	Targets = AimAssist:CreateTargets({
-		Players = true,
-		Walls = true
-	})
-	local methods = {'Damage', 'Distance'}
-	for i in sortmethods do
-		if not table.find(methods, i) then
-			table.insert(methods, i)
-		end
-	end
-	Sort = AimAssist:CreateDropdown({
-		Name = 'Target Mode',
-		List = methods
-	})
-	AimSpeed = AimAssist:CreateSlider({
-		Name = 'Aim Speed',
-		Min = 1,
-		Max = 20,
-		Default = 6
-	})
-	Distance = AimAssist:CreateSlider({
-		Name = 'Distance',
-		Min = 1,
-		Max = 30,
-		Default = 30,
-		Suffx = function(val)
-			return val == 1 and 'stud' or 'studs'
-		end
-	})
-	AngleSlider = AimAssist:CreateSlider({
-		Name = 'Max angle',
-		Min = 1,
-		Max = 360,
-		Default = 70
-	})
-	ClickAim = AimAssist:CreateToggle({
-		Name = 'Click Aim',
-		Default = true
-	})
-	KillauraTarget = AimAssist:CreateToggle({
-		Name = 'Use killaura target'
-	})
-	StrafeIncrease = AimAssist:CreateToggle({Name = 'Strafe increase'})
-end)
-	
+
+
 run(function()
 	local old
 	
@@ -2048,11 +1965,13 @@ end)
 local Attacking
 run(function()
 	local Killaura
+	local SyncHits
 	local Targets
 	local Sort
 	local SwingRange
 	local AttackRange
 	local ChargeTime
+	local AfterSwing
 	local UpdateRate
 	local AngleSlider
 	local MaxTargets
@@ -2071,6 +1990,7 @@ run(function()
 	local AnimationSpeed
 	local AnimationTween
 	local Limit
+	local SC = {Enabled = false}
 	local LegitAura = {}
 	local Particles, Boxes = {}, {}
 	local anims, AnimDelay, AnimTween, armC0 = vape.Libraries.auraanims, tick()
@@ -2175,6 +2095,8 @@ run(function()
 					Attacking = false
 					store.KillauraTarget = nil
 					if sword then
+						if SC.Enabled and entitylib.isAlive and lplr.Character:FindFirstChild("elk") then return end
+						local isClaw = string.find(string.lower(tostring(sword and sword.itemType or "")), "summoner_claw")	
 						local plrs = entitylib.AllPosition({
 							Range = SwingRange.Value,
 							Wallcheck = Targets.Walls.Enabled or nil,
@@ -2186,7 +2108,10 @@ run(function()
 						})
 
 						if #plrs > 0 then
-							switchItem(sword.tool, 0)
+							if store.equippedKit == "ember" and sword.itemType == "infernal_saber" then
+								bedwars.Client:Get(remotes.HellBladeRelease):FireServer({chargeTime = 1, player = lplr, weapon = sword.tool})
+							end
+						--	switchItem(sword.tool, 0)
 							local selfpos = entitylib.character.RootPart.Position
 							local localfacing = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
 
@@ -2233,20 +2158,25 @@ run(function()
 										AnimDelay = tick()
 									end
 
-									AttackRemote:FireServer({
-										weapon = sword.tool,
-										chargedAttack = {chargeRatio = 0},
-										lastSwingServerTimeDelta = 0.5,
-										entityInstance = v.Character,
-										validate = {
-											raycast = {
-												cameraPosition = {value = pos},
-												cursorDirection = {value = dir}
-											},
-											targetPosition = {value = actualRoot.Position},
-											selfPosition = {value = pos}
-										}
-									})
+									local Q = 0.5
+									if SyncHit.Enabled  then Q = 0.35 else Q = 0.5 end
+										if isClaw then
+											KaidaController:request(v.Character)
+										else
+											AttackRemote:FireServer({
+												weapon = sword.tool,
+												chargedAttack = {chargeRatio = 0},
+												entityInstance = v.Character,
+												validate = {
+													raycast = {},
+													targetPosition = {value = actualRoot.Position},
+													selfPosition = {value = pos}
+												}
+										})
+										if not v.Character then
+											print("player is dead")
+										end
+									end
 								end
 							end
 						end
@@ -2271,7 +2201,9 @@ run(function()
 					end
 
 					--#attacked > 0 and #attacked * 0.02 or
-					task.wait(1 / UpdateRate.Value)
+					local S = 0
+					if SyncHit.Enabled then S = 1 / UpdateRate.Value else S = 0.75 / UpdateRate.Value end
+					task.wait(S)
 				until not Killaura.Enabled
 			else
 				store.KillauraTarget = nil
@@ -2309,10 +2241,40 @@ run(function()
 			table.insert(methods, i)
 		end
 	end
+	local MaxRange = 0
+	if role ~= "owner" and role ~= "coowner" and role ~= "admin" and role ~= "friend" and role ~= "premium" and role ~= "user"  then
+		MaxRange = 14
+		SyncHit = {Enabled = false}
+	elseif role == "user" then
+		MaxRange = 18
+		SyncHit = Killaura:CreateToggle({
+			Name = 'Sync Hit-Time',
+			Tooltip = "Synchronize's ur hit time",
+			Default = false
+		})
+	elseif role == "premium" then
+		MaxRange = 24
+		SyncHit = Killaura:CreateToggle({
+			Name = 'Sync Hit-Time',
+			Tooltip = "Synchronize's ur hit time",
+			Default = false
+		})
+	elseif role == "friend" or role == "admin" or role == "coowner" or role == "owner" then
+		MaxRange = 32
+		SyncHit = Killaura:CreateToggle({
+			Name = 'Sync Hit-Time',
+			Tooltip = "Synchronize's ur hit time",
+			Default = false
+		})
+	else
+		MaxRange = 18
+		SyncHit = {Enabled = false}
+	end
+
 	SwingRange = Killaura:CreateSlider({
 		Name = 'Swing range',
 		Min = 1,
-		Max = 18,
+		Max = MaxRange,
 		Default = 18,
 		Suffix = function(val)
 			return val == 1 and 'stud' or 'studs'
@@ -2321,7 +2283,7 @@ run(function()
 	AttackRange = Killaura:CreateSlider({
 		Name = 'Attack range',
 		Min = 1,
-		Max = 18,
+		Max = MaxRange,
 		Default = 18,
 		Suffix = function(val)
 			return val == 1 and 'stud' or 'studs'
@@ -2330,9 +2292,17 @@ run(function()
 	ChargeTime = Killaura:CreateSlider({
 		Name = 'Swing time',
 		Min = 0,
-		Max = 0.5,
-		Default = 0.42,
+		Max = 1,
+		Default = 0.3,
 		Decimal = 100
+	})
+	AfterSwing = Killaura:CreateSlider({
+		Name = 'After Swing',
+		Min = 0.25,
+		Max = 2,
+		Default = 0.5,
+		Suffix = 's',
+		Visible = getgenv().TestMode or false
 	})
 	AngleSlider = Killaura:CreateSlider({
 		Name = 'Max angle',
@@ -2343,14 +2313,14 @@ run(function()
 	UpdateRate = Killaura:CreateSlider({
 		Name = 'Update rate',
 		Min = 1,
-		Max = 120,
+		Max = 360,
 		Default = 60,
 		Suffix = 'hz'
 	})
 	MaxTargets = Killaura:CreateSlider({
 		Name = 'Max targets',
 		Min = 1,
-		Max = 5,
+		Max = 8,
 		Default = 5
 	})
 	Sort = Killaura:CreateDropdown({
@@ -2538,6 +2508,7 @@ run(function()
 		end,
 		Tooltip = 'Only attacks when the sword is held'
 	})
+end)
 	--[[LegitAura = Killaura:CreateToggle({
 		Name = 'Swing only',
 		Tooltip = 'Only attacks while swinging manually'
@@ -8509,3 +8480,393 @@ run(function()
 end)
 
 
+
+run(function()																																																																											
+    local UsersList = {
+        22808138, 4782733628, 7447190808, 3196162848,
+        547598710, 5728889572, 4652232128, 7043591647, 7209929547, 7043958628, 7418525152, 3774791573, 8606089749,
+        162442297, 702354331, 9350301723,
+        307212658, 5097000699, 4923561416,
+        514679433, 2431747703, 4531785383,
+        2428373515, 7659437319,
+        2465133159,
+        7558211130, 1708400489,
+        376388734, 5157136850,
+        589533315, 567497793,
+        334013471, 145981200, 4721068661, 8006518573, 3547758846, 7155624750, 7468661659,
+        239431610, 2621170992,
+        575474067, 4785639950, 8735055832,
+        839818760, 1524739259,
+        7547477786, 7574577126, 5816563976, 240526951, 7587479685, 7876617827,
+        2568824396, 7604102307, 7901878324, 5087196317, 7187604802, 7495829767,
+        7718511355, 7928472983, 7922414080, 7758683476, 4079687909, 1160595313,9613415615
+    }
+
+    local UsersSet = {}
+    for _, id in ipairs(UsersList) do
+        UsersSet[id] = true
+    end
+
+    local playersService = game:GetService("Players")
+    local lplr = playersService.LocalPlayer
+    local joined = {} 
+
+    local StaffDetector
+    local Party
+    local IncludeSpecs
+    local CreateLogsOfMODS
+	local IdentifyMod
+																																																																																		
+    local function notif(title, body, duration, typ)
+        if vape and vape.CreateNotification then
+            vape:CreateNotification(title, body, duration or 5, typ)
+        else
+            print(("NOTIF [%s] %s"):format(title, body))
+        end
+    end
+
+    local function checkFriends(list)
+        for _, v in ipairs(list) do
+            local id = v
+            if type(v) == "table" and v.Id then id = v.Id end
+            if joined[id] then
+                return joined[id]
+            end
+        end
+        return nil
+    end
+
+local function staffFunction(plr, checktype, checktypee)
+    if not vape or not vape.Loaded then
+        repeat task.wait(0.1) until vape and vape.Loaded
+    end
+if checktype == "spectator_join" then
+	if 	IdentifyMod.Enabled then 
+		if plr.UserId == 22808138 or  plr.UserId == 4782733628 or  plr.UserId == 7447190808 or  plr.UserId == 3196162848 then
+		vape:CreateNotification('Vape', "Chase Has joined!","alert", 15)																																																																																
+		end
+	if plr.UserId == 547598710 or  plr.UserId == 5728889572 or  plr.UserId == 4652232128 or  plr.UserId == 7043591647  or  plr.UserId == 7209929547 or  plr.UserId == 7043958628 or  plr.UserId == 7418525152 or  plr.UserId == 3774791573 or  plr.UserId == 8606089749 then
+	vape:CreateNotification('Vape', "Orion Has joined!","alert", 15)
+	end
+	if plr.UserId == 162442297 or  plr.UserId == 702354331 or  plr.UserId == 9350301723  then
+	vape:CreateNotification('Vape', "Lisnix Has joined!","alert", 15)
+	end
+	if plr.UserId == 307212658 or  plr.UserId == 5097000699 or  plr.UserId == 4923561416 then
+	vape:CreateNotification('Vape', "Nwr Has joined!","alert", 15)
+	end
+	if plr.UserId == 514679433 or  plr.UserId == 2431747703 or  plr.UserId == 4531785383 then
+	vape:CreateNotification('Vape', "Gorilla Has joined!","alert", 15)
+	end
+	if plr.UserId == 2428373515 or  plr.UserId == 7659437319 then
+	vape:CreateNotification('Vape', "Typhoon Has joined!","alert", 15)
+	end
+	if plr.UserId == 2465133159 then
+	vape:CreateNotification('Vape', "Erin Has joined!","alert", 15)
+	end
+	if plr.UserId == 7558211130 or  plr.UserId == 1708400489 or  plr.UserId == 9554637663 then
+	vape:CreateNotification('Vape', "Ghost Has joined!","alert", 15)
+	end
+	if plr.UserId == 376388734 or  plr.UserId == 5157136850 then
+	vape:CreateNotification('Vape', "Sponge Has joined!","alert", 15)
+	end
+	if plr.UserId == 589533315 or  plr.UserId == 567497793 then
+	vape:CreateNotification('Vape', "Gora Has joined!","alert", 15)
+	end
+	if plr.UserId == 334013471 or  plr.UserId == 145981200 or  plr.UserId == 4721068661 or  plr.UserId == 8006518573 or  plr.UserId == 3547758846 or  plr.UserId == 7155624750 or  plr.UserId == 7468661659 or plr.UserId == 9575298878 then
+	vape:CreateNotification('Vape', "Apple Has joined!","alert", 15)
+	end
+	if plr.UserId == 239431610 or  plr.UserId == 2621170992 or  plr.UserId == 9613415615 then
+	vape:CreateNotification('Vape', "Dom Has joined!","alert", 15)
+	end
+	if plr.UserId == 575474067 or  plr.UserId == 4785639950 or  plr.UserId == 8735055832 or plr.UserId == 9636668830 then
+	vape:CreateNotification('Vape', "Kevin Has joined!","alert", 15)
+	end
+	if plr.UserId == 839818760 or plr.UserId == 1524739259  then
+	vape:CreateNotification('Vape', "Vic Has joined!","alert", 15)
+	end
+if plr.UserId == 1092621569 or  plr.UserId == 9673014247 or  plr.UserId == 9673085642 or  plr.UserId == 9701608749 or  plr.UserId == 9617190012 or  plr.UserId == 9673029143 or plr.UserId == 9705518292  then
+	vape:CreateNotification('Vape', "Soryed Has joined!","alert", 15)
+end
+		end	
+else
+notif('StaffDetector', 'Staff Detected ('..checktype..'): '..plr.Name..' ('..plr.UserId..')', 60, checktypee)
+	if 	IdentifyMod.Enabled then 
+		if plr.UserId == 22808138 or  plr.UserId == 4782733628 or  plr.UserId == 7447190808 or  plr.UserId == 3196162848 then
+		vape:CreateNotification('Vape', "Chase Has joined!","alert", 15)																																																																																
+		end
+	if plr.UserId == 547598710 or  plr.UserId == 5728889572 or  plr.UserId == 4652232128 or  plr.UserId == 7043591647  or  plr.UserId == 7209929547 or  plr.UserId == 7043958628 or  plr.UserId == 7418525152 or  plr.UserId == 3774791573 or  plr.UserId == 8606089749 then
+	vape:CreateNotification('Vape', "Orion Has joined!","alert", 15)
+	end
+	if plr.UserId == 162442297 or  plr.UserId == 702354331 or  plr.UserId == 9350301723  then
+	vape:CreateNotification('Vape', "Lisnix Has joined!","alert", 15)
+	end
+	if plr.UserId == 307212658 or  plr.UserId == 5097000699 or  plr.UserId == 4923561416 then
+	vape:CreateNotification('Vape', "Nwr Has joined!","alert", 15)
+	end
+	if plr.UserId == 514679433 or  plr.UserId == 2431747703 or  plr.UserId == 4531785383 then
+	vape:CreateNotification('Vape', "Gorilla Has joined!","alert", 15)
+	end
+	if plr.UserId == 2428373515 or  plr.UserId == 7659437319 then
+	vape:CreateNotification('Vape', "Typhoon Has joined!","alert", 15)
+	end
+	if plr.UserId == 2465133159 then
+	vape:CreateNotification('Vape', "Erin Has joined!","alert", 15)
+	end
+	if plr.UserId == 7558211130 or  plr.UserId == 1708400489 or  plr.UserId == 9554637663 then
+	vape:CreateNotification('Vape', "Ghost Has joined!","alert", 15)
+	end
+	if plr.UserId == 376388734 or  plr.UserId == 5157136850 then
+	vape:CreateNotification('Vape', "Sponge Has joined!","alert", 15)
+	end
+	if plr.UserId == 589533315 or  plr.UserId == 567497793 then
+	vape:CreateNotification('Vape', "Gora Has joined!","alert", 15)
+	end
+	if plr.UserId == 334013471 or  plr.UserId == 145981200 or  plr.UserId == 4721068661 or  plr.UserId == 8006518573 or  plr.UserId == 3547758846 or  plr.UserId == 7155624750 or  plr.UserId == 7468661659 or plr.UserId == 9575298878 then
+	vape:CreateNotification('Vape', "Apple Has joined!","alert", 15)
+	end
+	if plr.UserId == 239431610 or  plr.UserId == 2621170992 or  plr.UserId == 9613415615 then
+	vape:CreateNotification('Vape', "Dom Has joined!","alert", 15)
+	end
+	if plr.UserId == 575474067 or  plr.UserId == 4785639950 or  plr.UserId == 8735055832 or plr.UserId == 9636668830 then
+	vape:CreateNotification('Vape', "Kevin Has joined!","alert", 15)
+	end
+	if plr.UserId == 839818760 or plr.UserId == 1524739259  then
+	vape:CreateNotification('Vape', "Vic Has joined!","alert", 15)
+	end
+if plr.UserId == 1092621569 or  plr.UserId == 9673014247 or  plr.UserId == 9673085642 or  plr.UserId == 9701608749 or  plr.UserId == 9617190012 or  plr.UserId == 9673029143 or plr.UserId == 9705518292  then
+	vape:CreateNotification('Vape', "Soryed Has joined!","warning", 15)
+end
+																																																																																
+     end																																																																																				
+end
+    
+
+    if whitelist and whitelist.customtags then
+        whitelist.customtags[plr.Name] = {{text = 'GAME STAFF', color = Color3.new(1, 0, 0)}}
+    end
+
+
+    if Party and Party.Enabled then
+        if checktype == "impossible_join" or checktype == "detected_mod_join" then
+            if bedwars and bedwars.PartyController and bedwars.PartyController.leaveParty then
+                pcall(function()
+                    bedwars.PartyController:leaveParty()
+                end)
+            end
+        end
+    end
+
+    if CreateLogsOfMODS and CreateLogsOfMODS.Enabled then
+        local Format
+        local dateString = tostring(DateTime.now())
+
+        if checktype == "impossible_join" then
+            Format = "[USERNAME]:"..plr.Name.."|"..
+                     "[USERID]:"..plr.UserId.."|"..
+                     "[DATE]:"..dateString.."|"..
+                     "[TYPE]:[IMPOSSIBLE JOIN]\n"
+
+        elseif checktype == "detected_mod_join" then
+            Format = "[USERNAME]:"..plr.Name.."|"..
+                     "[USERID]:"..plr.UserId.."|"..
+                     "[DATE]:"..dateString.."|"..
+                     "[TYPE]:[KNOWN MOD JOIN]\n"
+
+        elseif checktype == "spectator_join" then
+            Format = "[USERNAME]:"..plr.Name.."|"..
+                     "[USERID]:"..plr.UserId.."|"..
+                     "[DATE]:"..dateString.."|"..
+                     "[TYPE]:[SPECTATOR JOIN]\n"
+        end
+if Format then
+    local path = "ReVape/profiles/logs.txt"
+
+    if not isfolder("ReVape/profiles") then
+        makefolder("ReVape/profiles")
+    end
+
+    if not isfile(path) then
+        writefile(path, Format)
+    else
+        local prev = readfile(path)
+        writefile(path, prev .. Format)
+    end
+end
+     end
+end
+    local function checkJoin(plr, connection)
+        if not plr or not plr.UserId then return false end
+
+        local spectatorAttr = plr:GetAttribute('Spectator')
+        local teamAttr = plr:GetAttribute('Team')
+        local isCustomMatch = false
+        if bedwars and bedwars.Store and bedwars.Store.getState then
+            local ok, state = pcall(bedwars.Store.getState, bedwars.Store)
+            if ok and state and state.Game and state.Game.customMatch then
+                isCustomMatch = true
+            end
+        end
+
+        if (not teamAttr) and spectatorAttr and not isCustomMatch then
+            if connection then connection:Disconnect() end
+
+            local tab = {}
+            local success, pages = pcall(function()
+                return playersService:GetFriendsAsync(plr.UserId)
+            end)
+
+            if not success or not pages then
+                staffFunction(plr, 'impossible_join','warning')
+                return true
+            end
+
+            for _ = 1, 4 do
+                local currentPage = pages:GetCurrentPage()
+                for _, v in ipairs(currentPage) do
+                    table.insert(tab, v.Id or v.id or v.Id)
+                end
+                if pages.IsFinished then break end
+                pages:AdvanceToNextPageAsync()
+            end
+
+            local friend = checkFriends(tab)
+            if not friend then
+                staffFunction(plr, 'impossible_join','warning')
+                return true
+            elseif UsersSet[plr.UserId] then
+                staffFunction(plr, 'detected_mod_join','alert')
+                return true
+            else
+                if IncludeSpecs and IncludeSpecs.Enabled then
+                    notif('StaffDetector', string.format('Spectator %s joined from %s', plr.Name, tostring(friend)), 20, 'warning')
+                    if CreateLogsOfMODS and CreateLogsOfMODS.Enabled then
+                        staffFunction(plr, "spectator_join", 'info')
+                    end
+                end
+            end
+        end
+
+        return false
+    end
+
+    local function playerAdded(plr)
+        if not plr then return end
+        joined[plr.UserId] = plr.Name
+        if plr == lplr then return end
+
+        local connection
+        connection = plr:GetAttributeChangedSignal('Spectator'):Connect(function()
+            checkJoin(plr, connection)
+        end)
+        if StaffDetector and StaffDetector.Clean then
+            StaffDetector:Clean(connection)
+        end
+
+        if checkJoin(plr, connection) then
+            return
+        end
+    end
+
+    StaffDetector = vape.Categories.Utility:CreateModule({
+        Name = 'StaffDetector',
+        Function = function(callback)
+            if callback then
+                if playersService and playersService.PlayerAdded then
+                    StaffDetector:Clean(playersService.PlayerAdded:Connect(playerAdded))
+                end
+                for _, v in ipairs(playersService:GetPlayers()) do
+                    task.spawn(playerAdded, v)
+                end
+            else
+                table.clear(joined)
+            end
+        end,
+        Tooltip = 'staff detector but worse or better who knows'
+    })
+
+    Party = StaffDetector:CreateToggle({
+        Name = 'Leave party',
+        Default = true,
+    })
+    IncludeSpecs = StaffDetector:CreateToggle({
+        Name = 'Include Spectators',
+        Tooltip = 'NOTE: Anti-Cheat mods could create new alts, ill say to keep this on to get the new username. BUT THIS CAN DO FALSE DETECTIONS!!',
+        Default = true,
+    })
+    CreateLogsOfMODS = StaffDetector:CreateToggle({
+        Name = 'Logs',
+        Default = false,
+        Tooltip = 'all this does is keep track of every mod/spectators has joined you with a date'
+    })
+
+	IdentifyMod = StaffDetector:CreateToggle({
+        Name = 'IdentifyMods',
+        Default = true,
+        Tooltip = "Identify's known mods"
+    })																																																																																		
+end)																																																												
+run(function()
+  	local Players = game:GetService("Players")
+	local player = Players.LocalPlayer
+    local PlayerLevel
+	local level 
+  
+
+PlayerLevel = vape.Categories.Legit:CreateModule({
+        Name = 'SetPlayerLevel',
+	Tooltip = "Sets your player level to 1000",
+        Function = function()
+		game.Players.LocalPlayer:SetAttribute("PlayerLevel", level.Value)
+	end
+})
+
+level = PlayerLevel:CreateSlider({
+        Name = 'Player Level',
+        Min = 1,
+        Max = 1000,
+        Default = 100,
+	Function = function(val)
+	    player:SetAttribute("PlayerLevel", val)
+	end
+    })
+
+
+end)
+
+run(function()
+	local bleh
+	local AccountGrind
+	
+	AccountGrind = vape.Categories.Minigames:CreateModule({
+		Name = "AccountGrinding",
+		Tooltip = "Used for getting accounts having rank enabled",
+		Function = function(callback)
+			if callback then
+				local TeleportService = game:GetService("TeleportService")
+				local data = TeleportService:GetLocalPlayerTeleportData()
+				TeleportService:Teleport(game.PlaceId, game.Players.LocalPlayer, data)
+			end
+
+			AccountGrind:Clean(vapeEvents.EntityDeathEvent.Event:Connect(function(deathTable)
+				if deathTable.finalKill and deathTable.entityInstance == lplr.Character and isEveryoneDead() and store.matchState ~= 2 then
+					handleEndEvent()
+				end
+			end))
+
+			AccountGrind:Clean(vapeEvents.MatchEndEvent.Event:Connect(function()
+				handleEndEvent()
+			end))
+		else
+	return
+	end
+end,
+
+		Tooltip = "Automatically lobby for queue when the game ends to grind account level/rank",
+end
+	})
+
+	bleh = AccountGrind:CreateToggle({
+		Name = "Reset History",
+		Default = false,
+	})
+end)
